@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AOE Match Tracker - Quản Lý Kèo Đấu Đế Chế</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto+Condensed:wght@400;700&display=swap');
+    body { font-family: 'Roboto Condensed', sans-serif; }
+    
+    @keyframes pulse-cute {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
+    .animate-cute { animation: pulse-cute 2s infinite ease-in-out; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <div id="app" class="max-w-6xl mx-auto px-4 py-6">
+    
+    <!-- NOTIFICATION ALERT -->
+    <div v-if="notification" 
+         :class="notification.type === 'error' ? 'bg-red-900 border-red-500 text-red-100' : 'bg-emerald-900 border-emerald-500 text-emerald-100'" 
+         class="fixed top-4 right-4 z-[100] max-w-sm p-4 rounded-xl border shadow-2xl flex justify-between items-center text-xs animate-bounce">
+      <span class="flex items-center gap-2">
+        <i :class="notification.type === 'error' ? 'fa-triangle-exclamation text-red-400' : 'fa-circle-check text-emerald-400'" class="fa-solid text-base"></i>
+        <b>{{ notification.message }}</b>
+      </span>
+      <button @click="notification = null" class="text-slate-400 hover:text-white ml-3 text-sm">&times;</button>
+    </div>
+
+    <!-- HEADER -->
+    <header class="flex flex-col md:flex-row justify-between items-center bg-slate-900 border border-amber-500/30 p-4 rounded-xl shadow-lg mb-6 gap-4">
+      <div class="flex items-center gap-3 cursor-pointer" @click="currentTab = 'matches'">
+        <div class="bg-amber-500 text-slate-950 p-2.5 rounded-lg font-black text-xl">AOE</div>
+        <div>
+          <h1 class="text-xl font-bold text-amber-400 tracking-wide">AOE MATCH TRACKER</h1>
+          <p class="text-xs text-slate-400">Hệ thống quản lý & theo dõi kèo đấu Đế Chế</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <button @click="showDonateModal = true" 
+                class="bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold px-3.5 py-1.5 rounded-full text-xs shadow-lg animate-cute border border-pink-300/40 flex items-center gap-1.5 transition">
+          <span>🧋</span>
+          <span>Gửi Admin ly nước</span>
+        </button>
+
+        <button @click="currentTab = 'matches'" 
+                :class="currentTab === 'matches' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'"
+                class="px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+          <i class="fa-solid fa-list-check"></i> Danh Sách Kèo
+        </button>
+
+        <button @click="openNewMatchModal" 
+                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-3.5 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+          <i class="fa-solid fa-plus-circle"></i> Tạo Kèo Mới
+        </button>
+
+        <!-- Admin Status & Login -->
+        <button v-if="!isAdmin" @click="showAdminModal = true" 
+                class="bg-slate-800 hover:bg-slate-700 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1.5">
+          <i class="fa-solid fa-lock"></i> Đăng Nhập Admin
+        </button>
+
+        <div v-else class="flex items-center gap-2 bg-slate-800 border border-emerald-500/50 px-3 py-1 rounded-lg">
+          <span class="text-xs text-emerald-400 font-bold"><i class="fa-solid fa-user-shield"></i> Admin Active</span>
+          <button @click="showPlayerManagerModal = true" class="text-[11px] bg-slate-700 hover:bg-slate-600 px-2 py-0.5 rounded">Quản Lý</button>
+          <button @click="logoutAdmin" class="text-xs text-red-400 hover:text-red-300 ml-1" title="Đăng xuất Admin"><i class="fa-solid fa-right-from-bracket"></i></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- TAB 1: DANH SÁCH KÈO ĐẤU -->
+    <div v-if="currentTab === 'matches'" class="space-y-4">
+      <div class="flex justify-between items-center bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+        <div class="flex gap-2">
+          <button @click="filterStatus = 'ALL'" :class="filterStatus === 'ALL' ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-800 text-slate-400'" class="px-3 py-1 rounded text-xs">Tất cả ({{ matches.length }})</button>
+          <button @click="filterStatus = 'LIVE'" :class="filterStatus === 'LIVE' ? 'bg-red-600 text-white font-bold' : 'bg-slate-800 text-slate-400'" class="px-3 py-1 rounded text-xs">🔴 Trực tiếp ({{ liveMatchesCount }})</button>
+          <button @click="filterStatus = 'FINISHED'" :class="filterStatus === 'FINISHED' ? 'bg-slate-700 text-white font-bold' : 'bg-slate-800 text-slate-400'" class="px-3 py-1 rounded text-xs">🏁 Đã kết thúc</button>
+        </div>
+        <button @click="fetchInitialData" class="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1">
+          <i class="fa-solid fa-rotate-right" :class="{'fa-spin': isLoading}"></i> Làm mới
+        </button>
+      </div>
+
+      <!-- Grid Cards Kèo Đấu -->
+      <div v-if="filteredMatches.length > 0" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div v-for="match in filteredMatches" :key="match.id" 
+             @click="selectMatch(match)"
+             class="bg-slate-900 hover:border-amber-500/50 border border-slate-800 p-4 rounded-xl cursor-pointer transition shadow-md relative">
+          
+          <div class="flex justify-between items-center mb-2.5">
+            <div class="flex items-center gap-2">
+              <span class="font-bold px-2 py-0.5 rounded text-[11px] bg-slate-800 text-amber-400 border border-amber-500/20">
+                {{ match.mode }}
+              </span>
+              <span v-if="match.status === 'LIVE'" class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold animate-pulse">🔴 TRỰC TIẾP</span>
+              <span v-else class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded">🏁 KẾT THÚC</span>
+            </div>
+            
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-slate-400"><i class="fa-regular fa-clock mr-1"></i>{{ match.formattedTime }}</span>
+              <button v-if="isAdmin" 
+                      @click.stop="deleteSingleMatch(match.id)" 
+                      title="Xóa kèo đấu này vĩnh viễn" 
+                      class="bg-red-600 hover:bg-red-700 text-white text-[11px] font-bold px-2.5 py-0.5 rounded shadow border border-red-400 flex items-center gap-1 transition">
+                <i class="fa-solid fa-trash-can"></i> Xóa
+              </button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-7 gap-2 items-center bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80 mb-2">
+            <div class="col-span-3 text-right">
+              <div class="font-bold text-red-400 text-xs truncate">Team Đỏ</div>
+              <div class="text-[11px] text-slate-300 truncate">{{ match.redTeam.join(', ') }}</div>
+            </div>
+            <div class="col-span-1 text-center font-black text-base">
+              <span class="text-red-400">{{ getMatchScore(match).red }}</span>
+              <span class="text-slate-600 mx-0.5">-</span>
+              <span class="text-blue-400">{{ getMatchScore(match).blue }}</span>
+            </div>
+            <div class="col-span-3 text-left">
+              <div class="font-bold text-blue-400 text-xs truncate">Team Xanh</div>
+              <div class="text-[11px] text-slate-300 truncate">{{ match.blueTeam.join(', ') }}</div>
+            </div>
+          </div>
+
+          <div class="flex justify-between items-center text-[11px] text-slate-400 border-t border-slate-800/80 pt-2">
+            <div>Số trận: <span class="font-bold text-slate-200">{{ match.games.length }}</span></div>
+            <div v-if="showCivStats">
+              Cung-Chém: <span class="text-cyan-400 font-bold">{{ getMatchCivStats(match).cung }}</span> - <span class="text-yellow-400 font-bold">{{ getMatchCivStats(match).chem }}</span>
+            </div>
+            <div><i class="fa-solid fa-user-pen mr-1"></i>{{ match.updatedBy }}</div>
+          </div>
+        </div>
+      </div>
+      <div v-else class="text-center py-10 bg-slate-900/40 rounded-xl border border-dashed border-slate-800 text-slate-500 text-sm">
+        Chưa có kèo đấu nào.
+      </div>
+    </div>
+
+    <!-- TAB 2: CHI TIẾT KÈO ĐẤU -->
+    <div v-if="currentTab === 'detail' && selectedMatch" class="space-y-4">
+      <div class="flex justify-between items-center">
+        <button @click="currentTab = 'matches'" class="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1">
+          <i class="fa-solid fa-arrow-left"></i> Quay lại danh sách
+        </button>
+
+        <div class="flex items-center gap-2 text-xs">
+          <button v-if="isAdmin" 
+                  @click="deleteSingleMatch(selectedMatch.id)" 
+                  class="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1 rounded flex items-center gap-1">
+            <i class="fa-solid fa-trash-can"></i> Xóa Kèo Này
+          </button>
+
+          <span v-if="hasUpdatePermission" class="text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 px-2.5 py-1 rounded">
+            <i class="fa-solid fa-unlock mr-1"></i> Quyền Cập Nhật Active ({{ currentUpdater }})
+          </span>
+          <button v-else-if="selectedMatch.status === 'LIVE'" @click="openLoginUpdaterModal" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-3 py-1 rounded">
+            <i class="fa-solid fa-key mr-1"></i> Nhập Mật Khẩu Để Cập Nhật
+          </button>
+        </div>
+      </div>
+
+      <!-- Info Banner -->
+      <div class="bg-slate-900 p-4 rounded-xl border border-amber-500/30">
+        <div class="flex flex-col md:flex-row justify-between md:items-center gap-3 border-b border-slate-800 pb-3 mb-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base font-bold text-amber-400">Kèo {{ selectedMatch.mode }}</span>
+              <span v-if="selectedMatch.status === 'LIVE'" class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-bold animate-pulse">🔴 TRỰC TIẾP</span>
+              <span v-else class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded">🏁 KẾT THÚC</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">
+              <i class="fa-regular fa-clock mr-1"></i> {{ selectedMatch.formattedTime }} | 
+              <i class="fa-solid fa-user-pen ml-1 mr-1"></i> Người phụ trách: <span class="text-amber-300 font-bold">{{ selectedMatch.updatedBy }}</span>
+            </p>
+          </div>
+
+          <div class="bg-slate-950 px-5 py-2 rounded-xl border border-slate-800 text-center">
+            <div class="text-[10px] text-slate-400">TỈ SỐ CHUNG CUỘC</div>
+            <div class="text-2xl font-black">
+              <span class="text-red-400">{{ activeMatchScore.red }}</span> - <span class="text-blue-400">{{ activeMatchScore.blue }}</span>
+            </div>
+            <div v-if="showCivStats" class="text-[11px] text-slate-400">
+              Tổng Cung - Chém: <span class="text-cyan-400 font-bold">{{ activeMatchCivStats.cung }}</span> - <span class="text-yellow-400 font-bold">{{ activeMatchCivStats.chem }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div class="bg-red-950/30 border border-red-900/40 p-2.5 rounded-lg">
+            <span class="text-red-400 font-bold block mb-0.5">TEAM ĐỎ:</span>
+            <span class="text-slate-200 font-semibold">{{ selectedMatch.redTeam.join(' - ') }}</span>
+          </div>
+          <div class="bg-blue-950/30 border border-blue-900/40 p-2.5 rounded-lg">
+            <span class="text-blue-400 font-bold block mb-0.5">TEAM XANH:</span>
+            <span class="text-slate-200 font-semibold">{{ selectedMatch.blueTeam.join(' - ') }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- FORM CẬP NHẬT TRẬN -->
+      <div v-if="selectedMatch.status === 'LIVE' && hasUpdatePermission" class="bg-slate-900 p-4 rounded-xl border border-emerald-500/30">
+        <h3 class="text-sm font-bold text-emerald-400 mb-3 flex items-center gap-1.5 border-b border-slate-800 pb-2">
+          <i class="fa-solid fa-gamepad"></i> Cập Nhật Trận {{ selectedMatch.games.length + 1 }}
+        </h3>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-red-900/30 space-y-2">
+            <span class="text-xs text-red-400 font-bold block">Quân Team Đỏ:</span>
+            <div v-for="(p, i) in selectedMatch.redTeam" :key="'r-'+i" class="flex items-center gap-2">
+              <span class="text-xs w-24 truncate text-slate-300">{{ p }}:</span>
+              <select v-model="currentGame.redCivs[i]" class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs w-full">
+                <option value="" disabled>-- Chọn quân --</option>
+                <option v-for="c in civs" :value="c.name" :key="c.name">{{ c.name }} ({{ c.type }})</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/60 p-2.5 rounded-lg border border-blue-900/30 space-y-2">
+            <span class="text-xs text-blue-400 font-bold block">Quân Team Xanh:</span>
+            <div v-for="(p, i) in selectedMatch.blueTeam" :key="'b-'+i" class="flex items-center gap-2">
+              <span class="text-xs w-24 truncate text-slate-300">{{ p }}:</span>
+              <select v-model="currentGame.blueCivs[i]" class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs w-full">
+                <option value="" disabled>-- Chọn quân --</option>
+                <option v-for="c in civs" :value="c.name" :key="c.name">{{ c.name }} ({{ c.type }})</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-slate-950 p-3 rounded-lg border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-amber-400">Đội Thắng:</span>
+            <div class="flex gap-2">
+              <button @click="currentGame.winner = 'RED'" 
+                      :class="currentGame.winner === 'RED' ? 'bg-red-600 font-bold text-white shadow-lg' : 'bg-slate-800 text-slate-400'"
+                      class="px-3 py-1 rounded text-xs transition">
+                🔴 Team Đỏ Thắng
+              </button>
+              <button @click="currentGame.winner = 'BLUE'" 
+                      :class="currentGame.winner === 'BLUE' ? 'bg-blue-600 font-bold text-white shadow-lg' : 'bg-slate-800 text-slate-400'"
+                      class="px-3 py-1 rounded text-xs transition">
+                🔵 Team Xanh Thắng
+              </button>
+            </div>
+          </div>
+
+          <div class="flex gap-2 w-full md:w-auto">
+            <button @click="addGameToMatch" class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-1.5 rounded text-xs">
+              + Cập Nhật Kết Quả Trận
+            </button>
+            <button @click="finishMatch" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-4 py-1.5 rounded text-xs">
+              🏁 Kết Thúc Kèo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LỊCH SỬ CÁC TRẬN ĐẤU -->
+      <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+        <h3 class="text-sm font-bold text-amber-400 mb-3 flex items-center justify-between border-b border-slate-800 pb-2">
+          <span><i class="fa-solid fa-list-ol mr-1.5"></i> Chi Tiết Bảng Lịch Sử Đấu</span>
+          <span class="text-xs font-normal text-slate-400">Tổng: {{ selectedMatch.games.length }} trận</span>
+        </h3>
+
+        <div v-if="selectedMatch.games.length > 0" class="space-y-3">
+          <div v-for="(g, idx) in selectedMatch.games" :key="idx" 
+               class="bg-slate-950 p-3 rounded-xl border border-slate-800 text-xs shadow-md">
+            
+            <div class="flex justify-between items-center border-b border-slate-800/80 pb-2 mb-2">
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-amber-400 bg-slate-900 px-2 py-0.5 rounded border border-amber-500/20">Trận {{ idx + 1 }}</span>
+                <span :class="g.winner === 'RED' ? 'text-red-400 font-bold' : 'text-blue-400 font-bold'">
+                  {{ g.winner === 'RED' ? '🔴 Team Đỏ Thắng' : '🔵 Team Xanh Thắng' }}
+                </span>
+              </div>
+              
+              <div class="flex items-center gap-3">
+                <span v-if="showCivStats" class="text-[11px] text-slate-400">
+                  Tỉ lệ: <span class="text-cyan-400 font-bold">{{ getGameCivStats(g).cung }} Cung</span> - <span class="text-yellow-400 font-bold">{{ getGameCivStats(g).chem }} Chém</span>
+                </span>
+
+                <button v-if="hasUpdatePermission || isAdmin" 
+                        @click="deleteGameFromMatch(idx)" 
+                        title="Xóa trận nhập sai này" 
+                        class="text-[10px] bg-red-950 hover:bg-red-800 text-red-300 border border-red-700/50 px-2 py-0.5 rounded transition">
+                  <i class="fa-solid fa-trash-can mr-1"></i>Xóa
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+              <div class="bg-red-950/20 p-2 rounded-lg border border-red-900/30">
+                <div class="font-bold text-red-400 text-[11px] mb-1">TEAM ĐỎ</div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <div v-for="(p, pi) in selectedMatch.redTeam" :key="'rp-'+pi" class="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                    <span class="text-slate-300 font-semibold text-[11px]">{{ p }}:</span>
+                    <span :class="getCivTypeClass(g.redCivs[pi])" class="px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      {{ g.redCivs[pi] || '---' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-blue-950/20 p-2 rounded-lg border border-blue-900/30">
+                <div class="font-bold text-blue-400 text-[11px] mb-1">TEAM XANH</div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <div v-for="(p, pi) in selectedMatch.blueTeam" :key="'bp-'+pi" class="flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-800">
+                    <span class="text-slate-300 font-semibold text-[11px]">{{ p }}:</span>
+                    <span :class="getCivTypeClass(g.blueCivs[pi])" class="px-1.5 py-0.5 rounded text-[10px] font-bold">
+                      {{ g.blueCivs[pi] || '---' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <div v-else class="text-center py-6 text-slate-500 text-xs">Chưa có trận đấu nào.</div>
+      </div>
+    </div>
+
+    <!-- MODAL 1: TẠO KÈO ĐẤU MỚI -->
+    <div v-if="showNewMatchModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-5 space-y-4 shadow-2xl">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-plus-circle mr-1"></i>Tạo Kèo Đấu Mới</h3>
+          <button @click="showNewMatchModal = false" class="text-slate-400 hover:text-white">&times;</button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-slate-400 mb-1">Thể thức:</label>
+              <select v-model="newMatchForm.mode" @change="onModeChange" class="bg-slate-800 border border-slate-700 p-2 rounded text-xs w-full">
+                <option value="1v1">1 vs 1 (Cần 2 Players)</option>
+                <option value="2v2">2 vs 2 (Cần 4 Players)</option>
+                <option value="4v4">4 vs 4 (Cần 8 Players)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-slate-400 mb-1">Người phụ trách Update:</label>
+              <select v-model="newMatchForm.updatedBy" class="bg-slate-800 border border-slate-700 p-2 rounded text-xs w-full">
+                <option value="" disabled>-- Chọn Player --</option>
+                <option v-for="p in players" :value="p.name" :key="p.name">{{ p.name }}</option>
+              </select>
+            </div>
+          </div>
+
+          <div v-if="!isAdmin && newMatchForm.updatedBy">
+            <label class="block text-amber-400 mb-1">Mật khẩu người phụ trách ({{ newMatchForm.updatedBy }}):</label>
+            <input type="password" v-model="newMatchForm.updaterPassword" placeholder="Nhập mật khẩu do Admin cấp..." class="bg-slate-800 border border-amber-500/50 p-2 rounded text-xs w-full">
+          </div>
+
+          <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 text-[11px] text-slate-400">
+            <div class="font-bold text-amber-400 mb-1"><i class="fa-solid fa-circle-info mr-1"></i> Liên hệ cấp quyền/mật khẩu tạo kèo:</div>
+            <div class="flex items-center gap-3">
+              <a href="https://www.facebook.com/xoanks" target="_blank" class="text-blue-400 hover:underline flex items-center gap-1">
+                <i class="fa-brands fa-facebook"></i> Facebook: xoanks
+              </a>
+              <span>|</span>
+              <a href="https://zalo.me/0868549555" target="_blank" class="text-cyan-400 hover:underline flex items-center gap-1">
+                <i class="fa-solid fa-comment-dots"></i> Zalo: 0868549555
+              </a>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div class="space-y-2 bg-red-950/20 p-2.5 rounded-lg border border-red-900/30">
+              <span class="font-bold text-red-400 block">Team Đỏ ({{ getSelectedCount('red') }}/{{ playerInputsCount }}):</span>
+              <div v-for="(p, i) in playerInputsCount" :key="'nr-'+i">
+                <select v-model="newMatchForm.redTeam[i]" class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs w-full">
+                  <option value="" disabled>-- Chọn Player {{ i + 1 }} --</option>
+                  <option v-for="player in getAvailablePlayers('red', i)" :value="player.name" :key="player.name">{{ player.name }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="space-y-2 bg-blue-950/20 p-2.5 rounded-lg border border-blue-900/30">
+              <span class="font-bold text-blue-400 block">Team Xanh ({{ getSelectedCount('blue') }}/{{ playerInputsCount }}):</span>
+              <div v-for="(p, i) in playerInputsCount" :key="'nb-'+i">
+                <select v-model="newMatchForm.blueTeam[i]" class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs w-full">
+                  <option value="" disabled>-- Chọn Player {{ i + 1 }} --</option>
+                  <option v-for="player in getAvailablePlayers('blue', i)" :value="player.name" :key="player.name">{{ player.name }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-slate-800 pt-3">
+          <button @click="showNewMatchModal = false" class="px-3 py-1.5 bg-slate-800 rounded text-xs font-bold">Hủy</button>
+          <button @click="createMatch" class="px-4 py-1.5 bg-amber-500 text-slate-950 rounded text-xs font-bold">Khởi Tạo Kèo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 2: DONATE QR CODE -->
+    <div v-if="showDonateModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-pink-500/40 rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl text-center relative overflow-hidden">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-bold text-pink-400 flex items-center gap-1.5">
+            <span>🧋</span> Gửi Admin Ly Nước Mát
+          </h3>
+          <button @click="showDonateModal = false" class="text-slate-400 hover:text-white">&times;</button>
+        </div>
+
+        <p class="text-xs text-slate-300">
+          Cảm ơn bạn đã sử dụng hệ thống! Mọi sự ủng hộ ly trà đá là động lực lớn để Admin duy trì & nâng cấp web! ❤️
+        </p>
+
+        <div class="bg-white p-3 rounded-xl inline-block shadow-inner border border-pink-200">
+          <img src="https://img.vietqr.io/image/VPB-0868549555-compact2.png?amount=0&addInfo=Moi%20Admin%20Coc%20Nuoc&accountName=NGUYEN%20TUAN%20ANH" 
+               alt="Mã QR Chuyển Khoản VPBank" 
+               class="w-56 h-56 object-contain mx-auto rounded-lg">
+        </div>
+
+        <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs space-y-1">
+          <div class="text-amber-400 font-bold">VPBank (Ngân Hàng TMCP Việt Nam Thịnh Vượng)</div>
+          <div class="text-slate-200 font-mono font-bold tracking-wider">STK: 0868549555</div>
+          <div class="text-slate-400">Chủ tài khoản: <span class="text-white font-bold">NGUYỄN TUẤN ANH</span></div>
+        </div>
+
+        <button @click="showDonateModal = false" class="w-full py-2 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white font-bold rounded-lg text-xs transition">
+          Cảm ơn bạn nhiều lắm! ✨
+        </button>
+      </div>
+    </div>
+
+    <!-- MODAL 3: NHẬP PASS CẬP NHẬT -->
+    <div v-if="showLoginUpdaterModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-amber-500/30 rounded-xl max-w-sm w-full p-5 space-y-3">
+        <h3 class="text-sm font-bold text-amber-400 text-center">Xác Thực Quyền Cập Nhật</h3>
+        <p class="text-xs text-slate-400 text-center">Nhập mật khẩu của người phụ trách (<b>{{ selectedMatch.updatedBy }}</b>) để sửa kết quả.</p>
+        <input type="password" v-model="updaterPassInput" @keyup.enter="verifyUpdaterPassword" placeholder="Mật khẩu cá nhân..." class="bg-slate-800 border border-slate-700 p-2 rounded text-xs w-full text-center">
+        
+        <div class="bg-slate-950 p-2 rounded border border-slate-800 text-[11px] text-slate-400 text-center space-y-1">
+          <div>Chưa có mật khẩu? Liên hệ Admin:</div>
+          <div class="flex justify-center gap-3">
+            <a href="https://www.facebook.com/xoanks" target="_blank" class="text-blue-400 hover:underline"><i class="fa-brands fa-facebook"></i> Facebook</a>
+            <span>|</span>
+            <a href="https://zalo.me/0868549555" target="_blank" class="text-cyan-400 hover:underline"><i class="fa-solid fa-comment-dots"></i> Zalo</a>
+          </div>
+        </div>
+
+        <div class="flex gap-2">
+          <button @click="showLoginUpdaterModal = false" class="w-full py-1.5 bg-slate-800 rounded text-xs">Hủy</button>
+          <button @click="verifyUpdaterPassword" class="w-full py-1.5 bg-amber-500 text-slate-950 font-bold rounded text-xs">Xác Nhận</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 4: ADMIN LOGIN -->
+    <div v-if="showAdminModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-amber-500/30 rounded-xl max-w-sm w-full p-5 space-y-3 text-center">
+        <h3 class="text-sm font-bold text-amber-400"><i class="fa-solid fa-user-shield mr-1"></i> Đăng Nhập Admin</h3>
+        <input type="password" v-model="adminPasswordInput" @keyup.enter="loginAdmin" placeholder="Mật khẩu Admin..." class="bg-slate-800 border border-slate-700 p-2 rounded text-xs w-full text-center">
+        <div class="flex gap-2">
+          <button @click="showAdminModal = false" class="w-full py-1.5 bg-slate-800 rounded text-xs">Hủy</button>
+          <button @click="loginAdmin" class="w-full py-1.5 bg-amber-500 text-slate-950 font-bold rounded text-xs">Đăng Nhập</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL 5: QUẢN LÝ PLAYER & CẤU HÌNH ADMIN -->
+    <div v-if="showPlayerManagerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-5 space-y-4 max-h-[90vh] flex flex-col">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-2">
+          <h3 class="text-sm font-bold text-emerald-400"><i class="fa-solid fa-sliders mr-1"></i> Bảng Quản Trị Hệ Thống</h3>
+          <button @click="showPlayerManagerModal = false" class="text-slate-400 hover:text-white">&times;</button>
+        </div>
+
+        <!-- CẤU HÌNH BẬT/TẮT CUNG CHÉM -->
+        <div class="bg-slate-950 p-3 rounded-lg border border-amber-500/30 flex justify-between items-center">
+          <div>
+            <span class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-chart-pie mr-1"></i> Hiển Thị Thông Số Cung - Chém</span>
+            <span class="text-[10px] text-slate-400">Ẩn/hiện chỉ số tỉ lệ Cung-Chém trên toàn giao diện</span>
+          </div>
+          <button @click="toggleCivStats" 
+                  :class="showCivStats ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-400'" 
+                  class="px-3 py-1 rounded-full text-xs border border-slate-700 transition">
+            {{ showCivStats ? 'ON (Đang Hiện)' : 'OFF (Đang Ẩn)' }}
+          </button>
+        </div>
+
+        <!-- ĐỔI MẬT KHẨU ADMIN LƯU TRÊN GOOGLE SHEET -->
+        <div class="bg-slate-950 p-3 rounded-lg border border-amber-500/30 space-y-2">
+          <span class="text-xs font-bold text-amber-400 block"><i class="fa-solid fa-key mr-1"></i> Mật Khẩu Đăng Nhập Admin:</span>
+          <div class="flex items-center gap-2">
+            <input type="text" v-model="adminPasswordConfig" placeholder="Mật khẩu Admin mới..." class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs flex-1">
+            <button @click="saveAdminPassword" class="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold px-3 py-1.5 rounded text-xs transition">
+              Đổi Mật Khẩu
+            </button>
+          </div>
+        </div>
+
+        <!-- DỌN DẸP LỊCH SỬ -->
+        <div class="bg-slate-950 p-3 rounded-lg border border-red-900/40 space-y-2">
+          <span class="text-xs font-bold text-red-400 block"><i class="fa-solid fa-broom mr-1"></i> Dọn Dẹp / Xóa Kèo Đã Kết Thúc:</span>
+          <div class="flex items-center gap-2">
+            <select v-model="cleanupDays" class="bg-slate-800 border border-slate-700 p-1.5 rounded text-xs flex-1">
+              <option :value="1">Trước 1 ngày</option>
+              <option :value="2">Trước 2 ngày</option>
+              <option :value="3">Trước 3 ngày</option>
+              <option :value="7">Trước 1 tuần (7 ngày)</option>
+              <option :value="0">Xóa tất cả kèo đã kết thúc</option>
+            </select>
+            <button @click="cleanupOldMatches" class="bg-red-700 hover:bg-red-600 text-white font-bold px-3 py-1.5 rounded text-xs transition">
+              Xóa Ngay
+            </button>
+          </div>
+        </div>
+
+        <!-- QUẢN LÝ PLAYER -->
+        <div class="space-y-2">
+          <span class="text-xs font-bold text-emerald-400 block"><i class="fa-solid fa-user-plus mr-1"></i> Quản Lý Player & Pass:</span>
+          <div class="grid grid-cols-5 gap-2">
+            <input type="text" v-model="newPlayerForm.name" placeholder="Tên Game Thủ..." class="col-span-3 bg-slate-800 border border-slate-700 p-1.5 rounded text-xs">
+            <input type="text" v-model="newPlayerForm.password" placeholder="Pass..." class="col-span-1 bg-slate-800 border border-slate-700 p-1.5 rounded text-xs">
+            <button @click="addPlayer" class="col-span-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold">Thêm</button>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-1.5 border-t border-b border-slate-800 py-2 pr-1">
+          <div v-for="(p, idx) in players" :key="idx" class="flex justify-between items-center bg-slate-950 p-2 rounded border border-slate-800 text-xs">
+            <div>
+              <span class="font-bold text-slate-200">{{ p.name }}</span>
+              <span class="text-[10px] text-amber-400 ml-2">(Pass: {{ p.password || 'Chưa đặt' }})</span>
+            </div>
+            <div class="flex gap-1">
+              <button @click="editPlayerPass(idx)" class="bg-slate-800 text-amber-400 px-2 py-0.5 rounded text-[10px]">Đổi Pass</button>
+              <button @click="deletePlayer(idx)" class="bg-red-950 text-red-400 px-2 py-0.5 rounded text-[10px]">Xóa</button>
+            </div>
+          </div>
+        </div>
+
+        <button @click="showPlayerManagerModal = false" class="w-full py-1.5 bg-slate-800 rounded text-xs font-bold">Đóng</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbzhP_FgidIi3qDjtfXe11XphwzbuVrf6gw0qVWaXlb2WPe9DWP7yEq1bCGp9-TxpG2QtQ/exec";
+
+    Vue.createApp({
+      data() {
+        return {
+          currentTab: 'matches',
+          filterStatus: 'ALL',
+          isLoading: false,
+          notification: null,
+
+          showDonateModal: false,
+
+          isAdmin: false,
+          showAdminModal: false,
+          adminPasswordInput: '',
+          adminPasswordConfig: '00716441516', // LƯU VÀ CẶP NHẬT TỪ SHEET
+          showPlayerManagerModal: false,
+          newPlayerForm: { name: '', password: '' },
+          cleanupDays: 1,
+
+          showCivStats: true,
+
+          hasUpdatePermission: false,
+          currentUpdater: '',
+          showLoginUpdaterModal: false,
+          updaterPassInput: '',
+
+          players: [],
+
+          civs: [
+            { name: "Cartha", type: "chém" }, { name: "Choson", type: "chém" }, { name: "Greek", type: "chém" },
+            { name: "Mace", type: "chém" }, { name: "Minoan", type: "chém" }, { name: "Persian", type: "chém" },
+            { name: "Roman", type: "chém" }, { name: "Yamato", type: "chém" }, { name: "Assy", type: "cung" },
+            { name: "Baby", type: "cung" }, { name: "Egyp", type: "cung" }, { name: "Hittite", type: "cung" },
+            { name: "Palmyran", type: "cung" }, { name: "Phoenic", type: "cung" }, { name: "Shang", type: "cung" },
+            { name: "Sumer", type: "cung" }
+          ],
+
+          matches: [],
+          selectedMatch: null,
+
+          showNewMatchModal: false,
+          newMatchForm: {
+            mode: '2v2',
+            redTeam: ['', ''],
+            blueTeam: ['', ''],
+            updatedBy: '',
+            updaterPassword: ''
+          },
+
+          currentGame: {
+            redCivs: [],
+            blueCivs: [],
+            winner: null
+          }
+        }
+      },
+      computed: {
+        playerInputsCount() {
+          if (this.newMatchForm.mode === '1v1') return 1;
+          if (this.newMatchForm.mode === '2v2') return 2;
+          return 4;
+        },
+        filteredMatches() {
+          if (this.filterStatus === 'ALL') return this.matches;
+          return this.matches.filter(m => m.status === this.filterStatus);
+        },
+        liveMatchesCount() {
+          return this.matches.filter(m => m.status === 'LIVE').length;
+        },
+        activeMatchScore() {
+          return this.selectedMatch ? this.getMatchScore(this.selectedMatch) : { red: 0, blue: 0 };
+        },
+        activeMatchCivStats() {
+          return this.selectedMatch ? this.getMatchCivStats(this.selectedMatch) : { cung: 0, chem: 0 };
+        }
+      },
+      methods: {
+        showNotify(msg, type = 'success') {
+          this.notification = { message: msg, type: type };
+          setTimeout(() => { this.notification = null; }, 4000);
+        },
+
+        getSelectedCount(teamSide) {
+          const list = teamSide === 'red' ? this.newMatchForm.redTeam : this.newMatchForm.blueTeam;
+          return list.filter(p => p !== '' && p !== null).length;
+        },
+
+        getAvailablePlayers(teamSide, currentIdx) {
+          const selectedRed = this.newMatchForm.redTeam;
+          const selectedBlue = this.newMatchForm.blueTeam;
+          
+          const activePlayersInOtherLiveMatches = new Set();
+          this.matches.forEach(m => {
+            if (m.status === 'LIVE') {
+              [...(m.redTeam || []), ...(m.blueTeam || [])].forEach(p => {
+                if (p) activePlayersInOtherLiveMatches.add(p);
+              });
+            }
+          });
+          
+          return this.players.filter(p => {
+            const name = p.name;
+            if (activePlayersInOtherLiveMatches.has(name)) return false;
+            if (selectedRed.includes(name) && !(teamSide === 'red' && selectedRed[currentIdx] === name)) return false;
+            if (selectedBlue.includes(name) && !(teamSide === 'blue' && selectedBlue[currentIdx] === name)) return false;
+            return true;
+          });
+        },
+
+        async fetchInitialData() {
+          this.isLoading = true;
+          try {
+            if (API_URL !== "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+              const res = await fetch(API_URL + "?action=getInitialData");
+              const data = await res.json();
+              if (data.players && data.players.length) this.players = data.players;
+              if (data.matches) this.matches = data.matches;
+              if (data.showCivStats !== undefined) this.showCivStats = data.showCivStats;
+              if (data.adminPassword) this.adminPasswordConfig = data.adminPassword;
+            }
+          } catch (e) {
+            console.error("Lỗi API:", e);
+          } finally {
+            this.isLoading = false;
+          }
+        },
+
+        async toggleCivStats() {
+          this.showCivStats = !this.showCivStats;
+          this.showNotify(this.showCivStats ? "Đã BẬT hiển thị thông số Cung - Chém" : "Đã TẮT hiển thị thông số Cung - Chém");
+          if (API_URL !== "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+            await fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'saveSettings', showCivStats: this.showCivStats })
+            });
+          }
+        },
+
+        async saveAdminPassword() {
+          if (!this.adminPasswordConfig.trim()) {
+            this.showNotify("Mật khẩu Admin không được để rỗng!", "error");
+            return;
+          }
+          this.showNotify("Đã đổi mật khẩu Admin thành công!");
+          if (API_URL !== "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+            await fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'saveAdminPassword', adminPassword: this.adminPasswordConfig.trim() })
+            });
+          }
+        },
+
+        loginAdmin() {
+          if (this.adminPasswordInput.trim() === this.adminPasswordConfig.trim()) {
+            this.isAdmin = true;
+            this.hasUpdatePermission = true;
+            this.currentUpdater = 'Admin';
+            this.showAdminModal = false;
+            this.adminPasswordInput = '';
+            this.showNotify("Đã đăng nhập Admin thành công!");
+          } else {
+            this.showNotify("Mật khẩu Admin không đúng!", "error");
+          }
+        },
+        logoutAdmin() {
+          this.isAdmin = false;
+          this.hasUpdatePermission = false;
+          this.showNotify("Đã đăng xuất Admin.");
+        },
+
+        openLoginUpdaterModal() {
+          this.updaterPassInput = '';
+          this.showLoginUpdaterModal = true;
+        },
+
+        verifyUpdaterPassword() {
+          const targetPlayer = this.players.find(p => p.name === this.selectedMatch.updatedBy);
+          if (this.isAdmin || (targetPlayer && targetPlayer.password === this.updaterPassInput)) {
+            this.hasUpdatePermission = true;
+            this.currentUpdater = this.selectedMatch.updatedBy;
+            this.showLoginUpdaterModal = false;
+            this.showNotify(`Xác thực thành công! Quyền cập nhật mở cho ${this.currentUpdater}`);
+          } else {
+            this.showNotify("Mật khẩu cá nhân không đúng!", "error");
+          }
+        },
+
+        async deleteSingleMatch(matchId) {
+          if (!this.isAdmin) {
+            this.showNotify("Chỉ Admin mới có quyền xóa kèo đấu!", "error");
+            return;
+          }
+
+          if (confirm("Bạn có chắc chắn muốn xóa vĩnh viễn kèo đấu này?")) {
+            this.matches = this.matches.filter(m => m.id !== matchId);
+            if (this.selectedMatch && this.selectedMatch.id === matchId) {
+              this.selectedMatch = null;
+              this.currentTab = 'matches';
+            }
+            this.showNotify("Đã xóa kèo đấu thành công!");
+            if (API_URL !== "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+              await fetch(API_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'deleteMatches', matchIds: [matchId] })
+              });
+            }
+          }
+        },
+
+        async deleteGameFromMatch(gameIndex) {
+          if (!this.hasUpdatePermission && !this.isAdmin) {
+            this.showNotify("Bạn không có quyền chỉnh sửa kèo này!", "error");
+            return;
+          }
+
+          if (confirm(`Bạn có chắc chắn muốn xóa kết quả Trận ${gameIndex + 1}?`)) {
+            this.selectedMatch.games.splice(gameIndex, 1);
+            await this.syncMatchToBackend(this.selectedMatch);
+            this.showNotify(`Đã xóa Trận ${gameIndex + 1} thành công! Bạn có thể nhập lại kết quả đúng.`);
+          }
+        },
+
+        async cleanupOldMatches() {
+          const days = this.cleanupDays;
+          const confirmText = days === 0 ? "xóa TẤT CẢ kèo đấu đã kết thúc" : `xóa các kèo đã kết thúc trước đó ${days} ngày`;
+          if (!confirm(`Bạn có chắc chắn muốn ${confirmText}?`)) return;
+
+          const now = new Date();
+          const cutoffTime = days === 0 ? Infinity : now.getTime() - (days * 24 * 60 * 60 * 1000);
+
+          const matchesToKeep = [];
+          const deletedIds = [];
+
+          this.matches.forEach(m => {
+            let shouldDelete = false;
+            if (m.status === 'FINISHED') {
+              if (days === 0) {
+                shouldDelete = true;
+              } else if (m.createdAt) {
+                if (m.createdAt < cutoffTime) shouldDelete = true;
+              } else {
+                shouldDelete = true;
+              }
+            }
+
+            if (shouldDelete) {
+              deletedIds.push(m.id);
+            } else {
+              matchesToKeep.push(m);
+            }
+          });
+
+          this.matches = matchesToKeep;
+          this.showNotify(`Đã dọn dẹp thành công ${deletedIds.length} kèo đấu cũ!`);
+
+          if (API_URL !== "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") {
+            await fetch(API_URL, {
+              method: 'POST',
+              body: JSON.stringify({ action: 'deleteMatches', matchIds: deletedIds })
+            });
+          }
+        },
+
+        addPlayer() {
+          if (!this.newPlayerForm.name.trim()) return;
+          this.players.push({ name: this.newPlayerForm.name.trim(), password: this.newPlayerForm.password || '123' });
+          this.newPlayerForm = { name: '', password: '' };
+          this.syncPlayersToBackend();
+        },
+        editPlayerPass(idx) {
+          const newPass = prompt(`Nhập mật khẩu mới cho ${this.players[idx].name}:`, this.players[idx].password);
+          if (newPass !== null) {
+            this.players[idx].password = newPass.trim();
+            this.syncPlayersToBackend();
+          }
+        },
+        deletePlayer(idx) {
+          if (confirm(`Xóa game thủ ${this.players[idx].name}?`)) {
+            this.players.splice(idx, 1);
+            this.syncPlayersToBackend();
+          }
+        },
+        async syncPlayersToBackend() {
+          if (API_URL === "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") return;
+          await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'savePlayers', players: this.players }) });
+        },
+
+        openNewMatchModal() {
+          this.newMatchForm = { mode: '2v2', redTeam: ['', ''], blueTeam: ['', ''], updatedBy: '', updaterPassword: '' };
+          this.showNewMatchModal = true;
+        },
+        onModeChange() {
+          const count = this.playerInputsCount;
+          this.newMatchForm.redTeam = Array(count).fill('');
+          this.newMatchForm.blueTeam = Array(count).fill('');
+        },
+
+        createMatch() {
+          if (!this.newMatchForm.updatedBy) {
+            this.showNotify("Vui lòng chọn người phụ trách update!", "error");
+            return;
+          }
+
+          const requiredCount = this.playerInputsCount;
+          const selectedRedCount = this.getSelectedCount('red');
+          const selectedBlueCount = this.getSelectedCount('blue');
+
+          if (selectedRedCount < requiredCount || selectedBlueCount < requiredCount) {
+            const missingRed = requiredCount - selectedRedCount;
+            const missingBlue = requiredCount - selectedBlueCount;
+            this.showNotify(`Vui lòng chọn đủ player! Thể thức ${this.newMatchForm.mode} còn thiếu: Đỏ (${missingRed}), Xanh (${missingBlue}).`, "error");
+            return;
+          }
+
+          if (!this.isAdmin) {
+            const target = this.players.find(p => p.name === this.newMatchForm.updatedBy);
+            if (target && target.password !== this.newMatchForm.updaterPassword) {
+              this.showNotify("Mật khẩu của người phụ trách không chính xác!", "error");
+              return;
+            }
+          }
+
+          const now = new Date();
+          const pad = n => n < 10 ? '0' + n : n;
+          const formattedTime = `${pad(now.getHours())}:${pad(now.getMinutes())} - ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+
+          const newMatch = {
+            id: 'MATCH_' + Date.now(),
+            createdAt: Date.now(),
+            mode: this.newMatchForm.mode,
+            redTeam: [...this.newMatchForm.redTeam],
+            blueTeam: [...this.newMatchForm.blueTeam],
+            updatedBy: this.newMatchForm.updatedBy,
+            formattedTime: formattedTime,
+            status: 'LIVE',
+            games: []
+          };
+
+          this.matches.unshift(newMatch);
+          this.selectedMatch = newMatch;
+          this.hasUpdatePermission = true;
+          this.currentUpdater = newMatch.updatedBy;
+          this.showNewMatchModal = false;
+          this.currentTab = 'detail';
+          this.resetCurrentGame();
+          this.syncMatchToBackend(newMatch);
+          this.showNotify("Đã khởi tạo kèo đấu thành công!");
+        },
+
+        selectMatch(match) {
+          this.selectedMatch = match;
+          this.currentTab = 'detail';
+          this.hasUpdatePermission = this.isAdmin;
+          this.resetCurrentGame();
+        },
+
+        resetCurrentGame() {
+          const count = this.selectedMatch ? this.selectedMatch.redTeam.length : 2;
+          this.currentGame = { redCivs: Array(count).fill(''), blueCivs: Array(count).fill(''), winner: null };
+        },
+
+        addGameToMatch() {
+          if (!this.selectedMatch) return;
+          if (!this.currentGame.winner) {
+            alert("Vui lòng cập nhật đội thắng!");
+            return;
+          }
+          if (this.currentGame.redCivs.some(c => !c) || this.currentGame.blueCivs.some(c => !c)) {
+            alert("Vui lòng chọn đầy đủ quân cho các game thủ!");
+            return;
+          }
+
+          this.selectedMatch.games.push(JSON.parse(JSON.stringify(this.currentGame)));
+          this.syncMatchToBackend(this.selectedMatch);
+          this.showNotify(`Đã thêm kết quả trận ${this.selectedMatch.games.length}!`);
+          this.resetCurrentGame();
+        },
+
+        async finishMatch() {
+          if (confirm("Xác nhận kết thúc kèo đấu chung cuộc?")) {
+            this.selectedMatch.status = 'FINISHED';
+            await this.syncMatchToBackend(this.selectedMatch);
+            this.showNotify("Đã kết thúc kèo đấu!");
+          }
+        },
+
+        async syncMatchToBackend(match) {
+          if (API_URL === "DEPLOYED_GOOGLE_APPS_SCRIPT_URL_HERE") return;
+          await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'saveMatch', match: match }) });
+        },
+
+        getCivType(civName) {
+          const found = this.civs.find(c => c.name === civName);
+          return found ? found.type : '';
+        },
+        getCivTypeClass(civName) {
+          const type = this.getCivType(civName);
+          if (type === 'cung') return 'bg-cyan-950 text-cyan-300 border border-cyan-800/50';
+          if (type === 'chém') return 'bg-yellow-950 text-yellow-300 border border-yellow-800/50';
+          return 'bg-slate-800 text-slate-400';
+        },
+        getGameCivStats(game) {
+          let cung = 0, chem = 0;
+          [...(game.redCivs || []), ...(game.blueCivs || [])].forEach(c => {
+            const t = this.getCivType(c);
+            if (t === 'cung') cung++;
+            if (t === 'chém') chem++;
+          });
+          return { cung, chem };
+        },
+        getMatchScore(match) {
+          let red = 0, blue = 0;
+          (match.games || []).forEach(g => {
+            if (g.winner === 'RED') red++;
+            if (g.winner === 'BLUE') blue++;
+          });
+          return { red, blue };
+        },
+        getMatchCivStats(match) {
+          let cung = 0, chem = 0;
+          (match.games || []).forEach(g => {
+            const st = this.getGameCivStats(g);
+            cung += st.cung;
+            chem += st.chem;
+          });
+          return { cung, chem };
+        }
+      },
+      mounted() {
+        this.fetchInitialData();
+
+        setInterval(() => {
+          if (!this.showNewMatchModal && !this.showAdminModal && !this.showPlayerManagerModal && !this.showLoginUpdaterModal) {
+            this.fetchInitialData();
+          }
+        }, 5000);
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
